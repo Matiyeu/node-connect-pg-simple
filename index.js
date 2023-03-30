@@ -307,19 +307,22 @@ module.exports = function (session) {
      * @param {string} query - the database query to perform
      * @param {any[]} [params] - the parameters of the query
      * @param {boolean} [noTableCreation]
+     * @param {boolean} [firstRow]
      * @returns {Promise<PGStoreQueryResult|undefined>}
      * @access private
      */
-    async _asyncQuery (query, params, noTableCreation) {
+    async _asyncQuery (query, params, noTableCreation, firstRow = true) {
       await this._ensureSessionStoreTable(noTableCreation);
 
       if (this.#pgPromise) {
         const res = await this.#pgPromise.any(query, params);
-        return res && res[0] ? res[0] : undefined;
+        if (!res || res.length) return;
+        return firstRow ? res[0] : res;
       } else {
         if (!this.#pool) throw new Error('Pool missing for some reason');
         const res = await this.#pool.query(query, params);
-        return res && res.rows && res.rows[0] ? res.rows[0] : undefined;
+        if (!res || !res.rows || !res.rows.length) return;
+        return firstRow ? res.rows[0] : res.rows;
       }
     }
 
@@ -330,10 +333,11 @@ module.exports = function (session) {
      * @param {any[]|PGStoreQueryCallback} [params] - the parameters of the query or the callback function
      * @param {PGStoreQueryCallback} [fn] - standard Node.js callback returning the resulting rows
      * @param {boolean} [noTableCreation]
+     * @param {boolean} [firstRow]
      * @returns {void}
      * @access private
      */
-    query (query, params, fn, noTableCreation) {
+    query (query, params, fn, noTableCreation, firstRow = true) {
       /** @type {any[]} */
       let resolvedParams;
 
@@ -345,7 +349,7 @@ module.exports = function (session) {
         resolvedParams = params || [];
       }
 
-      const result = this._asyncQuery(query, resolvedParams, noTableCreation);
+      const result = this._asyncQuery(query, resolvedParams, noTableCreation, firstRow);
 
       callbackifyPromiseResolution(result, fn);
     }
